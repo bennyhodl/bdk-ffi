@@ -627,7 +627,13 @@ impl<S: Sleeper> AsyncClient<S> {
         let mut attempts = 0;
 
         loop {
-            match self.client.get(url).send().await? {
+            let request = self.client.get(url);
+            // On wasm the request goes through the browser's fetch, which
+            // caches GETs per the response's Cache-Control (esplora sends
+            // max-age=10), so a sync could read chain state that old.
+            #[cfg(target_arch = "wasm32")]
+            let request = request.fetch_cache_no_store();
+            match request.send().await? {
                 resp if attempts < self.max_retries && is_status_retryable(resp.status()) => {
                     S::sleep(delay).await;
                     attempts += 1;
