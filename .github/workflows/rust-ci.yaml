@@ -25,14 +25,15 @@ jobs:
 
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
       - name: "Set up Rust"
-        uses: actions-rust-lang/setup-rust-toolchain@v1
+        uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache: false
+          rustflags: "-D warnings"
 
       - name: "Check Cargo.lock"
         run: |
@@ -42,10 +43,43 @@ jobs:
           fi
 
       - name: "Build"
-        run: cargo build
+        run: cargo build --locked
 
       - name: "Test"
-        run: CLASSPATH=./tests/jna/jna-5.14.0.jar cargo test --features uniffi/bindgen-tests
+        run: CLASSPATH=./tests/jna/jna-5.14.0.jar cargo test --locked --features uniffi/bindgen-tests
+
+  wasm:
+    name: "Check wasm32"
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: bdk-ffi
+    env:
+      # secp256k1-sys needs a C compiler with a wasm32 backend
+      CC_wasm32_unknown_unknown: clang
+      AR_wasm32_unknown_unknown: llvm-ar
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          cache: false
+          components: clippy
+
+      - name: "Install LLVM"
+        run: sudo apt-get install -y llvm
+
+      - name: "Add wasm32 target"
+        run: rustup target add wasm32-unknown-unknown
+
+      - name: "Check wasm32-unknown-unknown"
+        run: cargo check --locked --target wasm32-unknown-unknown
+
+      - name: "Check clippy on wasm32"
+        run: cargo clippy --locked --target wasm32-unknown-unknown
 
   check:
     name: "Run clippy and fmt"
@@ -56,17 +90,18 @@ jobs:
         working-directory: bdk-ffi
     steps:
       - name: "Checkout"
-        uses: actions/checkout@v5
+        uses: actions/checkout@v7
         with:
           persist-credentials: false
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           cache: false
+          rustflags: "-D warnings"
           components: clippy, rustfmt
 
       - name: "Check fmt"
         run: cargo fmt --all -- --config format_code_in_doc_comments=true --check
 
       - name: "Check clippy"
-        run: cargo clippy --all-targets --features "uniffi/bindgen-tests"
+        run: cargo clippy --locked --all-targets --features "uniffi/bindgen-tests"
